@@ -1,0 +1,100 @@
+
+SELECT 
+  DATE_TRUNC(SAFE_CAST(transaction_time AS DATE), MONTH) AS sales_month,
+  ROUND(SUM(CAST(sale_amount_including_loyalty_points_used AS FLOAT64)), 2) AS total_revenue,
+  SUM(CAST(loyalty_points_used_by_customer AS INT64)) AS total_points_redeemed,
+  -- Calculating what % of revenue was "paid" via loyalty points
+  ROUND((SUM(CAST(loyalty_points_used_by_customer AS INT64)) / SUM(CAST(sale_amount_including_loyalty_points_used AS FLOAT64))) * 100, 2) AS loyalty_penetration_percent
+FROM 
+  `coffee-sales-analysis-487117.coffee_data.transaction_level_data`
+GROUP BY 1
+ORDER BY 1 ASC;
+
+-- chking cafe performance at city level
+
+SELECT 
+  -- Extracts the first word before the first space
+  SPLIT(store_name, ' ')[OFFSET(0)] AS city,
+  COUNT(DISTINCT transaction_number) AS total_orders,
+  ROUND(SUM(CAST(sale_amount_including_loyalty_points_used AS FLOAT64)), 2) AS total_revenue,
+  ROUND(AVG(CAST(sale_amount_including_loyalty_points_used AS FLOAT64)), 2) AS avg_order_value
+FROM 
+  `coffee-sales-analysis-487117.coffee_data.transaction_level_data`
+GROUP BY 1
+ORDER BY total_revenue DESC;
+
+WITH transaction_baskets AS (
+  SELECT 
+    transaction_number, 
+    CASE 
+    -- Coffee Categories
+    WHEN item_name LIKE '%HOT COFFEE%' OR item_name LIKE '%CAPPUCCINO%' OR item_name LIKE '%LATTE%' OR item_name LIKE '%ESPRESSO%' THEN 'Hot Coffee'
+    WHEN item_name LIKE '%COLD COFFEE%' OR item_name LIKE '%FRAPPE%' THEN 'Cold Coffee'
+    
+    -- Tea Categories
+    WHEN item_name LIKE '%TEA%' THEN 'Tea'
+    
+    -- Food Categories (Segmenting your FOOD1, FOOD2, etc.)
+    WHEN item_name LIKE 'FOOD%' OR item_name = 'VEG PIZZA' OR item_name = 'CHEESE SLICE' THEN 'Food & Snacks'
+    
+    -- Dessert/Add-ons
+    WHEN item_name LIKE '%ICE CREAM%' OR item_name IN ('WHIPPED CREAM', 'TOPPING', 'TOPPING SYRUPS') THEN 'Desserts & Add-ons'
+    
+    -- Other Beverages
+    WHEN item_name IN ('LEMONADE', 'SMOOTHIE', 'JUICES', 'MILKSHAKE', 'NATURAL DRINK%') THEN 'Cold Beverages (Non-Coffee)'
+    
+    -- Combos (Strategic for your campaign)
+    WHEN item_name LIKE 'COMBO%' THEN 'Combos'
+    
+    ELSE 'Other'
+  END AS item_category,
+    COUNT(item_name) AS items_per_transaction,
+  ROUND(SUM(CAST(sale_amount AS FLOAT64)), 2) AS total_revenue
+  FROM 
+    `coffee-sales-analysis-487117.coffee_data.item_level_data`
+  GROUP BY 1,2
+)
+SELECT item_category,
+  case when items_per_transaction = 1 then 'one item'
+  when items_per_transaction = 2 then 'two items'
+    when items_per_transaction = 3 then '3 items'
+    when items_per_transaction = 4 then '4 items'
+    when items_per_transaction = 5 then '5 items'
+    else 'more than 5 'end as txn_bucket,
+    count(*) as cnt,
+    sum(total_revenue) as tot_rev
+FROM transaction_baskets
+group  by 1,2;
+
+
+
+SELECT 
+  item_name,
+  CASE 
+    -- Coffee Categories
+    WHEN item_name LIKE '%HOT COFFEE%' OR item_name LIKE '%CAPPUCCINO%' OR item_name LIKE '%LATTE%' OR item_name LIKE '%ESPRESSO%' THEN 'Hot Coffee'
+    WHEN item_name LIKE '%COLD COFFEE%' OR item_name LIKE '%FRAPPE%' THEN 'Cold Coffee'
+    
+    -- Tea Categories
+    WHEN item_name LIKE '%TEA%' THEN 'Tea'
+    
+    -- Food Categories (Segmenting your FOOD1, FOOD2, etc.)
+    WHEN item_name LIKE 'FOOD%' OR item_name = 'VEG PIZZA' OR item_name = 'CHEESE SLICE' THEN 'Food & Snacks'
+    
+    -- Dessert/Add-ons
+    WHEN item_name LIKE '%ICE CREAM%' OR item_name IN ('WHIPPED CREAM', 'TOPPING', 'TOPPING SYRUPS') THEN 'Desserts & Add-ons'
+    
+    -- Other Beverages
+    WHEN item_name IN ('LEMONADE', 'SMOOTHIE', 'JUICES', 'MILKSHAKE', 'NATURAL DRINK%') THEN 'Cold Beverages (Non-Coffee)'
+    
+    -- Combos (Strategic for your campaign)
+    WHEN item_name LIKE 'COMBO%' THEN 'Combos'
+    
+    ELSE 'Other'
+  END AS item_category,
+  COUNT(*) AS quantity_sold,
+  ROUND(SUM(CAST(sale_amount AS FLOAT64)), 2) AS total_revenue
+FROM `coffee-sales-analysis-487117.coffee_data.item_level_data`
+WHERE item_name != '#N/A'
+GROUP BY 1, 2
+ORDER BY quantity_sold DESC;
