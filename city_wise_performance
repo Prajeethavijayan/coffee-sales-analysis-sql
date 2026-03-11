@@ -1,0 +1,11 @@
+SELECT 
+  DATE_TRUNC(SAFE_CAST(t.transaction_time AS DATE), MONTH) AS sales_month,
+  ROUND(SUM(CAST(i.sale_amount AS FLOAT64)), 2) AS monthly_revenue,
+  COUNT(DISTINCT t.transaction_number) AS total_orders
+FROM 
+  `coffee-sales-analysis-487117.coffee_data.transaction_level_data` AS t
+JOIN 
+  `coffee-sales-analysis-487117.coffee_data.item_level_data` AS i
+  ON t.transaction_number = i.transaction_number
+GROUP BY 1
+ORDER BY 1 DESC;
